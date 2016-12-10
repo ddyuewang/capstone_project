@@ -84,7 +84,7 @@ class Black_Litterman_Portfolio():
             print 'q', Q
 
         if verbosity:
-            print 'data preparation takes: ', timeit.default_timer() -  time4
+            print 'data preparation takes: ', timeit.default_timer() - time4
         
         #todo: make the matrix calculation more efficient!
         SIGMA = D + np.matmul(np.matmul(X, V),X.transpose())
@@ -120,18 +120,21 @@ def main():
     def FACTOR_EMA(df, half_life):
         return pd.ewma(df, halflife=half_life)
 
+    # def Factor_ARIMA(df):
+
+
     view_config = {"MA5" : lambda df: FACTOR_EMA(df.shift(1).dropna(axis=0), 5),
         "MA30" : lambda df: FACTOR_EMA(df.shift(1).dropna(axis=0), 30),
-            "MA120" : lambda df: FACTOR_EMA(df.shift(1).dropna(axis=0), 120)}
+        "MA120" : lambda df: FACTOR_EMA(df.shift(1).dropna(axis=0), 120)}
 
-    DR_view = BLDR.view_data_reader("Data/factor_return_w_industry.csv", view_config,
+    DR_view = BLDR.view_data_reader("/Users/yuewang/Dropbox/Capstone Project/structured_code_and_data/Data/factor_return_w_industry.csv", view_config,
                                 error_periods=60, error_method = "rolling_window")
-    DR_factor_return = BLDR.factor_return_data_reader("Data/factor_return_w_industry.csv",
+    DR_factor_return = BLDR.factor_return_data_reader("/Users/yuewang/Dropbox/Capstone Project/structured_code_and_data/Data/factor_return_w_industry.csv",
                                                   look_back_periods=60)
-    DR_residual = BLDR.residual_data_reader("Data/residual.csv",
+    DR_residual = BLDR.residual_data_reader("/Users/yuewang/Dropbox/Capstone Project/structured_code_and_data/Data/residual.csv",
                                         look_back_periods=60, threshold = None, min_periods=2, diagonalized=True)
     DR_residual.set_threshold(0.000001)
-    DR_factor_loading = BLDR.factor_loading_data_reader("Data/factor_loading_w_industry.csv")
+    DR_factor_loading = BLDR.factor_loading_data_reader("/Users/yuewang/Dropbox/Capstone Project/structured_code_and_data/Data/factor_loading_w_industry.csv")
     
     data_reader_config = {'view': DR_view, #call method return estimation and standard error of each predictors
         'factor_return': DR_factor_return, #call method return prior mean and covariance of factors
@@ -149,8 +152,6 @@ def main():
 
     ret_blb, h_blb, TRADING_UNIVERSE = BLP.single_period(target_date)
     print 'Dummy pnl', BLP(datetime(2015,5,1), datetime(2015,5,12))
-
-
 
 
 if __name__ == "__main__":

@@ -200,7 +200,7 @@ def examples():
                    "MA30" : lambda df: FACTOR_EMA(df.shift(1).dropna(axis=0), 30),
                    "MA120" : lambda df: FACTOR_EMA(df.shift(1).dropna(axis=0), 120)}
 
-    file_dir = "Data/factor_return_w_industry.csv"
+    file_dir = "/Users/yuewang/Dropbox/Capstone Project/structured_code_and_data/Data/factor_return_w_industry.csv"
     test_view = view_data_reader(file_dir, view_config, error_method="exponential")
     print 'Methods used:\n'
     print test_view.methods
@@ -209,7 +209,7 @@ def examples():
     print 'Error:\n', ERR
 
     ###factor return data reader example
-    file_dir = "Data/factor_return_w_industry.csv"
+    file_dir = "/Users/yuewang/Dropbox/Capstone Project/structured_code_and_data/Data/factor_return_w_industry.csv"
     test_factor_return = factor_return_data_reader(file_dir)
     MEAN, COV = test_factor_return(datetime(2014,5,1))
     print 'Mean:\n', MEAN
@@ -217,7 +217,7 @@ def examples():
 
 
     ###factor loading data reader example
-    file_dir = "Data/factor_loading_w_industry.csv"
+    file_dir = "/Users/yuewang/Dropbox/Capstone Project/structured_code_and_data/Data/factor_loading_w_industry.csv"
     test_factor_loading = factor_loading_data_reader(file_dir)
     FACTOR_LOADING, STOCK_RETURN = test_factor_loading(datetime(2014,5,1))
     print 'Factor loading:\n', FACTOR_LOADING
@@ -249,7 +249,7 @@ if __name__ == "__main__":
 #    
 #    df_factor_loading.drop('INDUSTRY', axis=1).to_csv("/Users/wyx/Documents/capstone/Data/factor_loading_w_industry.csv")
 
-    df_residual = pd.read_csv("/Users/wyx/Documents/capstone/Data/residual_return_v2.csv", sep =',')
+    df_residual = pd.read_csv("/Users/yuewang/Dropbox/Capstone Project/residual_return_v2.csv", sep =',')
     df_residual = df_residual.drop(['Unnamed: 0'],axis=1).rename(columns={'Ticker':'PERMNO',
                                                             'Residual':'RESIDUAL'}).set_index('Date')
 
