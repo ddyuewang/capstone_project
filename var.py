@@ -1,4 +1,4 @@
-from r_py_timeseries import *
+from r_py_ts import *
 
 class var(ts_generic):
     """
