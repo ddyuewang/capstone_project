@@ -8,8 +8,7 @@ warnings.filterwarnings("ignore")
 
 
 class vector_ar():
-
-    def __init__(self, df, lookback_step=200 ,pred_step=1, ):
+    def __init__(self, df, lookback_step=200, pred_step=1):
         self.data = df
         self.step = pred_step
         self.in_sample = lookback_step
@@ -33,7 +32,7 @@ class vector_ar():
         :return:
         """
         df_init = copy.deepcopy(self.data)
-        for row in range(self.in_sample+1, len(df_init.index)):
+        for row in range(self.in_sample, len(df_init.index)):
 
             tmp_df = df_init.iloc[:row, :]
             df_init.iloc[row,:] = self.var_predict_next(tmp_df).iloc[0,:]
@@ -48,6 +47,7 @@ if __name__ == "__main__":
 
     count = np.random.rand(214, 3)
     df = pd.DataFrame(index=pd.date_range('2016-01-01', '2016-08-01'), data=count, columns=['count1','count2','count3'])
-    var_test = vector_ar(df)
+    var_test = vector_ar(df,lookback_step=210)
     var_test()
-    print var_test.result.iloc[-6:,:]
+    print df.iloc[-14:,:]
+    print var_test.result.iloc[-14:,:]
