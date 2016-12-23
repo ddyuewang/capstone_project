@@ -1,6 +1,8 @@
 #BL model class
 from BL_data_reader import view_data_reader, factor_return_data_reader,\
                         factor_loading_data_reader, residual_data_reader
+import py_ts as ts_py
+import r_py_ts as ts_r
 from datetime import datetime, timedelta
 import BL_data_reader as BLDR
 import numpy as np
@@ -16,20 +18,20 @@ class Black_Litterman_Portfolio():
         self.factor_loading = data_reader_config['factor_loading']
         self._risk_aversion = risk_aversion
         self._factor_diagonalized = factor_diagonalized
-    
+
     def set_risk_aversion(self, risk_aversion):
         self._risk_aversion = risk_aversion
 
     def single_period(self, target_date, verbosity=False):
         #get estimation and error
         EST, ERR = self.view(self.view.methods[0],target_date)
-        
+
         #get factor posterior
         MEAN, COV = self.factor_return(target_date)
-        
+
         #get factor loading and return of each stock
         FACTOR_LOADING, STOCK_RETURN = self.factor_loading(target_date)
-    
+
         #get residul covariance
         RESIDUAL_COV = self.residual(target_date).dropna(axis=0).dropna(axis=1)
         is_valid_date = min([EST.shape[0], ERR.shape[0],
@@ -47,7 +49,7 @@ class Black_Litterman_Portfolio():
         M = np.kron(np.array([[1]] * NUM_PREDICTOR),np.eye(NUM_FACTOR))
 
         TRADING_UNIVERSE = list(set.intersection(set(FACTOR_LOADING.index),set(RESIDUAL_COV.index)))
-        
+
         D = RESIDUAL_COV.ix[TRADING_UNIVERSE][TRADING_UNIVERSE].as_matrix()
 
         if 'NAME' in FACTOR_LOADING.columns:
@@ -59,12 +61,12 @@ class Black_Litterman_Portfolio():
         #prior mean of the factors
         XI = MEAN[FACTOR_ALL].as_matrix().transpose()
         #prior covariance of factors
-        
+
         if self._factor_diagonalized:
             V = np.diag(COV.ix[FACTOR_ALL][FACTOR_ALL].as_matrix().diagonal())
         else:
             V = COV.ix[FACTOR_ALL][FACTOR_ALL].as_matrix()
-    
+
         q_list = []
         omega_list = []
         for method in self.view.methods:
@@ -84,8 +86,8 @@ class Black_Litterman_Portfolio():
             print 'q', Q
 
         if verbosity:
-            print 'data preparation takes: ', timeit.default_timer() - time4
-        
+            print 'data preparation takes: ', timeit.default_timer() -  time4
+
         #todo: make the matrix calculation more efficient!
         SIGMA = D + np.matmul(np.matmul(X, V),X.transpose())
         SIGMA_INV = np.linalg.inv(SIGMA)
@@ -120,38 +122,86 @@ def main():
     def FACTOR_EMA(df, half_life):
         return pd.ewma(df, halflife=half_life)
 
-    # def Factor_ARIMA(df):
+    def Arima(df, window=100):
+        arima_ = ts_r.arima(df, lookback=window)
+        arima_()
+        return arima_.result
+        del arima_
 
+    def Holt_winter(df, window=100):
+        hw_ = ts_r.holt_winter(df, lookback=window)
+        hw_()
+        return hw_.result
+        del hw_
 
-    view_config = {"MA5" : lambda df: FACTOR_EMA(df.shift(1).dropna(axis=0), 5),
-        "MA30" : lambda df: FACTOR_EMA(df.shift(1).dropna(axis=0), 30),
-        "MA120" : lambda df: FACTOR_EMA(df.shift(1).dropna(axis=0), 120)}
+    def Var(df, window=100):
+        var_ = ts_py.vector_ar(df, lookback=window)
+        var_()
+        return var_.result
+        del var_
 
-    DR_view = BLDR.view_data_reader("/Users/yuewang/Dropbox/Capstone Project/structured_code_and_data/Data/factor_return_w_industry.csv", view_config,
+    # view_config = {"var": lambda df: Var(df, 100)}
+
+    # view_config = {"ARIMA": lambda df: Arima(df.iloc[:120,:].shift(1),100)}
+    #                # "HW": lambda  df: Holt_winter(df.shift(1),100),
+    #                # "var": lambda df: Var(df.shift(1),100)}
+
+    # view_config = {"ARIMA": lambda df: Arima(df.iloc[:120,:],100),
+    #                   "HW": lambda df: Holt_winter(df.iloc[:120,:], 100),
+    #                  "var": lambda df: Var(df.iloc[:120,:],100)}
+
+    view_config = {"ARIMA": lambda df: Arima(df, 100),
+                   "HW": lambda df: Holt_winter(df, 100)}
+
+    # view_config = {"ARIMA": lambda df: Arima(df, 100),
+    #                "HW": lambda df: Holt_winter(df, 100),
+    #                "var": lambda df: Var(df, 100)}
+
+    # view_config = {"MA5" : lambda df: FACTOR_EMA(df.shift(1).dropna(axis=0), 5),
+    #     "MA30" : lambda df: FACTOR_EMA(df.shift(1).dropna(axis=0), 30),
+    #         "MA120" : lambda df: FACTOR_EMA(df.shift(1).dropna(axis=0), 120)}
+
+    DR_view = BLDR.view_data_reader("Data/factor_return_w_industry.csv", view_config,
                                 error_periods=60, error_method = "rolling_window")
-    DR_factor_return = BLDR.factor_return_data_reader("/Users/yuewang/Dropbox/Capstone Project/structured_code_and_data/Data/factor_return_w_industry.csv",
-                                                  look_back_periods=60)
-    DR_residual = BLDR.residual_data_reader("/Users/yuewang/Dropbox/Capstone Project/structured_code_and_data/Data/residual.csv",
-                                        look_back_periods=60, threshold = None, min_periods=2, diagonalized=True)
-    DR_residual.set_threshold(0.000001)
-    DR_factor_loading = BLDR.factor_loading_data_reader("/Users/yuewang/Dropbox/Capstone Project/structured_code_and_data/Data/factor_loading_w_industry.csv")
-    
-    data_reader_config = {'view': DR_view, #call method return estimation and standard error of each predictors
-        'factor_return': DR_factor_return, #call method return prior mean and covariance of factors
-            'residual': DR_residual,#call method return covariance of residuals
-                'factor_loading': DR_factor_loading #call method return factor loadings of each stock, also return the return of next B day for each stock
-                }
-    BLP = Black_Litterman_Portfolio(data_reader_config, 1, factor_diagonalized=False)
-    print BLP.view.methods
-    
-    target_date = datetime(2015,5,8)
-    EST, ERR = BLP.view('MA5',target_date)
-    MEAN, COV = BLP.factor_return(target_date)
-    FACTOR_LOADING, STOCK_RETURN = BLP.factor_loading(target_date)
-    RESIDUAL_COV = BLP.residual(target_date)
 
-    ret_blb, h_blb, TRADING_UNIVERSE = BLP.single_period(target_date)
-    print 'Dummy pnl', BLP(datetime(2015,5,1), datetime(2015,5,12))
+    for method in DR_view.estimation.keys():
+        print method
+        print "being saved"
+        DR_view.estimation[method].to_csv("view_"+method+"v1_.csv")
+
+    # #you can add new view
+    # def dummy_predictor(csv_file):
+    #     #using saved calculation result
+    #     _df_factor_return = pd.read_csv(csv_file, sep =',',index_col=0)
+    #     _df_factor_return.index = _df_factor_return.index.map(lambda idx: datetime.strptime(idx,"%Y-%m-%d"))
+    #     return _df_factor_return
+    #
+    # new_view = {"GRU": lambda df: dummy_predictor("Prediction/prediction_rnn_gru.csv")}
+    # #DR_view.add_view(new_view)
+    #
+    # DR_factor_return = BLDR.factor_return_data_reader("Data/factor_return_w_industry.csv",
+    #                                               look_back_periods=60)
+    # DR_residual = BLDR.residual_data_reader("Data/residual.csv",
+    #                                     look_back_periods=60, threshold = None, min_periods=2, diagonalized=True)
+    # DR_residual.set_threshold(0.000001)
+    # DR_factor_loading = BLDR.factor_loading_data_reader("Data/factor_loading_w_industry.csv")
+    #
+    # data_reader_config = {'view': DR_view, #call method return estimation and standard error of each predictors
+    #     'factor_return': DR_factor_return, #call method return prior mean and covariance of factors
+    #         'residual': DR_residual,#call method return covariance of residuals
+    #             'factor_loading': DR_factor_loading #call method return factor loadings of each stock, also return the return of next B day for each stock
+    #             }
+    # BLP = Black_Litterman_Portfolio(data_reader_config, 1, factor_diagonalized=False)
+    # print BLP.view.methods
+    #
+    # target_date = datetime(2015,5,8)
+    # EST, ERR = BLP.view('MA5',target_date)
+    # MEAN, COV = BLP.factor_return(target_date)
+    # FACTOR_LOADING, STOCK_RETURN = BLP.factor_loading(target_date)
+    # RESIDUAL_COV = BLP.residual(target_date)
+    #
+    # ret_blb, h_blb, TRADING_UNIVERSE = BLP.single_period(target_date)
+    # print 'Dummy pnl', BLP(datetime(2006,5,1), datetime(2006,5,12))
 
 
 if __name__ == "__main__":

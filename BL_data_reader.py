@@ -47,18 +47,27 @@ class view_data_reader():
             self._error = self.get_exponential_decay_error(periods=self.error_periods)
 
 
-
     def get_estimation(self):
         res = {}
         for method in self.config.keys():
             res[method] = self.config[method](self._df_factor_return)
         return res
+    
+    def add_view(self, config):
+        for method in config.keys():
+            self.config[method] = config[method]
+            self._estimation[method] = config[method](self._df_factor_return)
+        if self.error_method == "rolling_window":
+            self._error = self.get_standard_error(periods=self.error_periods)
+        elif self.error_method == "exponential":
+            self._error = self.get_exponential_decay_error(periods=self.error_periods)
+
 
     def get_standard_error(self, periods=60):
         res = {}
         for method in self.config.keys():
             res[method] = pd.rolling_apply(
-                            (self._df_factor_return - self._estimation[method].shift(-1)).dropna(axis=0),
+                            (self._df_factor_return - self._estimation[method]).shift(1).dropna(axis=0),
                             periods,
                             lambda x:np.sqrt(np.mean(x**2))
                                            ).dropna(axis=0)
@@ -67,7 +76,7 @@ class view_data_reader():
     def get_exponential_decay_error(self, periods=60):
         res = {}
         for method in self.config.keys():
-            res[method] = pd.ewma(((self._df_factor_return - self._estimation[method].shift(-1))**2).dropna
+            res[method] = pd.ewma(((self._df_factor_return - self._estimation[method]).shift(1)**2).dropna
                            (axis=0), halflife=periods).dropna(axis=0)
             res[method] = np.sqrt(res[method])
         return res
@@ -199,41 +208,105 @@ def examples():
     view_config = {"MA5" : lambda df: FACTOR_EMA(df.shift(1).dropna(axis=0), 5),
                    "MA30" : lambda df: FACTOR_EMA(df.shift(1).dropna(axis=0), 30),
                    "MA120" : lambda df: FACTOR_EMA(df.shift(1).dropna(axis=0), 120)}
-
-    file_dir = "/Users/yuewang/Dropbox/Capstone Project/structured_code_and_data/Data/factor_return_w_industry.csv"
+    #
+    file_dir = "Data/factor_return_w_industry.csv"
     test_view = view_data_reader(file_dir, view_config, error_method="exponential")
-    print 'Methods used:\n'
-    print test_view.methods
+    # print 'Methods used:\n'
+    # print test_view.methods
     EST, ERR = test_view('MA5',datetime(2014,1,3))
-    print 'Estimations:\n', EST
-    print 'Error:\n', ERR
+    print EST
+    # print 'Estimations:\n', EST
+    # print 'Error:\n', ERR
 
     ###factor return data reader example
-    file_dir = "/Users/yuewang/Dropbox/Capstone Project/structured_code_and_data/Data/factor_return_w_industry.csv"
+    file_dir = "Data/factor_return_w_industry.csv"
     test_factor_return = factor_return_data_reader(file_dir)
+
     MEAN, COV = test_factor_return(datetime(2014,5,1))
     print 'Mean:\n', MEAN
     print 'Covariance:\n', COV
+    print MEAN.shape
+    print COV.shape
 
+    # get factor loading and return of each stock
+    DR_residual = residual_data_reader("Data/residual.csv",
+                                       look_back_periods=60, threshold=None, min_periods=2, diagonalized=True)
+    DR_residual.set_threshold(0.000001)
+    RESIDUAL_COV = DR_residual(datetime(2014,5,1)).dropna(axis=0).dropna(axis=1)
+
+    print RESIDUAL_COV.head(5)
+    print RESIDUAL_COV.shape
+
+    print DR_residual(datetime(2014, 5, 1)).dropna(axis=0).dropna(axis=1)
 
     ###factor loading data reader example
-    file_dir = "/Users/yuewang/Dropbox/Capstone Project/structured_code_and_data/Data/factor_loading_w_industry.csv"
+    file_dir = "Data/factor_loading_w_industry.csv"
     test_factor_loading = factor_loading_data_reader(file_dir)
     FACTOR_LOADING, STOCK_RETURN = test_factor_loading(datetime(2014,5,1))
     print 'Factor loading:\n', FACTOR_LOADING
     print 'Stock return:\n', STOCK_RETURN
+    print FACTOR_LOADING.shape
+    print STOCK_RETURN.shape
+
+    TRADING_UNIVERSE = list(set.intersection(set(FACTOR_LOADING.index), set(RESIDUAL_COV.index)))
+    D = RESIDUAL_COV.ix[TRADING_UNIVERSE][TRADING_UNIVERSE].as_matrix()
+
+    if 'NAME' in FACTOR_LOADING.columns:
+        FACTOR_LOADING.drop('NAME', axis=1, inplace=True)
+
+    # FACTOR_ALL = list(MEAN.columns)
+    FACTOR_ALL = list(MEAN.columns)
+
+    # factor loading matrix
+    X = FACTOR_LOADING.ix[TRADING_UNIVERSE][FACTOR_ALL].as_matrix()
+
+    # prior mean of the factors
+    XI = MEAN[FACTOR_ALL].as_matrix().transpose()
+
+    # prior convariance matrix
+    V = COV.ix[FACTOR_ALL][FACTOR_ALL].as_matrix()
+
+    print "last piece of sanity check"
+    print FACTOR_LOADING.shape
+    print COV.shape
+    print RESIDUAL_COV.shape
+    part1 = FACTOR_LOADING.dot(COV).dot(FACTOR_LOADING.transpose())
+    part2 = RESIDUAL_COV
+
+    print part1.shape
+    print part2.shape
+
+    part3 = X.dot(V).dot(X.transpose()) + D
+    print part3.shape
+
+    part3_inv = np.linalg.inv(part3)
+    print part3_inv.shape
+
+    stock_t = STOCK_RETURN.ix[TRADING_UNIVERSE].as_matrix().reshape(len(TRADING_UNIVERSE))
+
+    part4 = np.matmul(part3_inv, X)
+    h_markwotiz = np.matmul(part4, XI)
+
+    holding_markwotiz = np.matmul(np.matmul(part3_inv, X), XI)
+    ret_markwotiz = h_markwotiz.reshape(len(TRADING_UNIVERSE)).dot(stock_t)
+    return_markwotiz = holding_markwotiz.reshape(len(TRADING_UNIVERSE)).dot(stock_t)
+
+
+    VAR = part1 + part2
+    print VAR.shape
+
 
     ###residual data reader example
-    df_sample_residual = pd.DataFrame({'Date': [datetime(2015,5,5),datetime(2015,5,5), datetime(2015,5,5),
-                                              datetime(2015,5,6),datetime(2015,5,6),datetime(2015,5,6)],
-                  'PERMNO': ['10107', '90319', '12060', '10107', '90319', '12060'],
-                  'RESIDUAL': [0.1, -0.2, 0.1, 0.4, -0.5, 0.6]}).set_index('Date')
-
-    df_sample_residual.to_csv("sample_residual.csv")
-    test_residual = residual_data_reader("sample_residual.csv")
-    print 'Residual covariance:\n', test_residual(datetime(2015,5,7))
-    test_residual.set_threshold(0.05)
-    print 'After remove extreme low vol stocks:\n', test_residual(datetime(2015,5,7))
+    # df_sample_residual = pd.DataFrame({'Date': [datetime(2015,5,5),datetime(2015,5,5), datetime(2015,5,5),
+    #                                           datetime(2015,5,6),datetime(2015,5,6),datetime(2015,5,6)],
+    #               'PERMNO': ['10107', '90319', '12060', '10107', '90319', '12060'],
+    #               'RESIDUAL': [0.1, -0.2, 0.1, 0.4, -0.5, 0.6]}).set_index('Date')
+    #
+    # df_sample_residual.to_csv("sample_residual.csv")
+    # test_residual = residual_data_reader("sample_residual.csv")
+    # print 'Residual covariance:\n', test_residual(datetime(2015,5,7))
+    # test_residual.set_threshold(0.05)
+    # print 'After remove extreme low vol stocks:\n', test_residual(datetime(2015,5,7))
 
 
 if __name__ == "__main__":
@@ -248,10 +321,10 @@ if __name__ == "__main__":
 #        #df_factor_loading.apply(lambda row: 1 if row['INDUSTRY']==industry else 0, axis=1)
 #    
 #    df_factor_loading.drop('INDUSTRY', axis=1).to_csv("/Users/wyx/Documents/capstone/Data/factor_loading_w_industry.csv")
-
-    df_residual = pd.read_csv("/Users/yuewang/Dropbox/Capstone Project/residual_return_v2.csv", sep =',')
-    df_residual = df_residual.drop(['Unnamed: 0'],axis=1).rename(columns={'Ticker':'PERMNO',
-                                                            'Residual':'RESIDUAL'}).set_index('Date')
+#
+#     df_residual = pd.read_csv("/Users/wyx/Documents/capstone/Data/residual_return_v2.csv", sep =',')
+#     df_residual = df_residual.drop(['Unnamed: 0'],axis=1).rename(columns={'Ticker':'PERMNO',
+#                                                             'Residual':'RESIDUAL'}).set_index('Date')
 
 
 

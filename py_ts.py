@@ -8,10 +8,10 @@ warnings.filterwarnings("ignore")
 
 
 class vector_ar():
-    def __init__(self, df, lookback_step=200, pred_step=1):
+    def __init__(self, df, lookback=200, pred_step=1):
         self.data = df
         self.step = pred_step
-        self.in_sample = lookback_step
+        self.insample = lookback
         self.result = None
 
     def var_predict_next(self, sub_df):
@@ -31,13 +31,20 @@ class vector_ar():
         :param in_sample_count:
         :return:
         """
-        df_init = copy.deepcopy(self.data)
-        for row in range(self.in_sample, len(df_init.index)):
+        # df_init = copy.deepcopy(self.data)
+        df_init = pd.DataFrame(index=self.data.index, columns=self.data.columns)
+        df_init.iloc[:self.insample, :] = self.data.iloc[:self.insample, :]
 
-            tmp_df = df_init.iloc[:row, :]
-            df_init.iloc[row,:] = self.var_predict_next(tmp_df).iloc[0,:]
+        for row in range(self.insample, len(df_init.index)+1):
+
+            ## fix look back range
+            start = row-self.insample
+            tmp_df = copy.deepcopy(self.data.iloc[start:row, :])
+            df_init.ix[tmp_df.index[-1], :] = self.var_predict_next(tmp_df).iloc[0,:]
+            print tmp_df.index[-1]
 
         self.result = df_init
+        del df_init
         return None
 
     def __call__(self, *args, **kwargs):
@@ -47,7 +54,7 @@ if __name__ == "__main__":
 
     count = np.random.rand(214, 3)
     df = pd.DataFrame(index=pd.date_range('2016-01-01', '2016-08-01'), data=count, columns=['count1','count2','count3'])
-    var_test = vector_ar(df,lookback_step=210)
+    var_test = vector_ar(df,lookback=201)
     var_test()
     print df.iloc[-14:,:]
     print var_test.result.iloc[-14:,:]
