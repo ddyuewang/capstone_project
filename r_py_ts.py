@@ -129,17 +129,33 @@ class arima(ts_generic):
         #         # # update each entries by entries by calling single predict function
         #         # tmp_df = df_init[[col]].dropna()
 
+        # col_name = 0
+        # for col in df_init.columns:
+        #     col_name = col_name + 1
+        #     for row in range(self.insample, len(df_init.index)+1):
+        #         start = row - self.insample
+        #         tmp_df = copy.deepcopy(self.data.iloc[start:row,:])
+        #         tmp_df = tmp_df[[col]]
+        #         tmp_df[[col]] = tmp_df[[col]].astype(float)
+        #         print (col_name, tmp_df.index[-1])
+        #         tmp_res = self.arima_predict_next(tmp_df[col])
+        #         df_init.loc[tmp_df.index[-1],[col]] = tmp_res.iloc[0]['Point Forecast']
+        #         del tmp_df
+        #         del tmp_res
         col_name = 0
         for col in df_init.columns:
             col_name = col_name + 1
-            for row in range(self.insample, len(df_init.index)+1):
+            for row in range(self.insample, len(df_init.index)):
                 start = row - self.insample
-                tmp_df = copy.deepcopy(self.data.iloc[start:row,:])
+                # print start, row
+                predict_date = self.data.iloc[row:row + 1, :].index
+                print (col_name,predict_date)
+                tmp_df = copy.deepcopy(self.data.iloc[start:row, :])
                 tmp_df = tmp_df[[col]]
                 tmp_df[[col]] = tmp_df[[col]].astype(float)
-                print (col_name, tmp_df.index[-1])
+                # print tmp_df.index[-1]
                 tmp_res = self.arima_predict_next(tmp_df[col])
-                df_init.loc[tmp_df.index[-1],[col]] = tmp_res.iloc[0]['Point Forecast']
+                df_init.loc[predict_date, [col]] = tmp_res.iloc[0]['Point Forecast']
                 del tmp_df
                 del tmp_res
 
@@ -190,14 +206,16 @@ class holt_winter(ts_generic):
         col_name = 0
         for col in df_init.columns:
             col_name = col_name + 1
-            for row in range(self.insample, len(df_init.index) + 1):
+            for row in range(self.insample, len(df_init.index)):
                 start = row - self.insample
+                # print start, row
+                predict_date = self.data.iloc[row:row+1,:].index
+                print (col_name,predict_date)
                 tmp_df = copy.deepcopy(self.data.iloc[start:row, :])
                 tmp_df = tmp_df[[col]]
                 tmp_df[[col]] = tmp_df[[col]].astype(float)
                 tmp_res = self.hw_predict_next(tmp_df[col])
-                print (col_name, tmp_df.index[-1])
-                df_init.loc[tmp_df.index[-1], [col]] = tmp_res.iloc[0]['Point Forecast']
+                df_init.loc[predict_date, [col]] = tmp_res.iloc[0]['Point Forecast']
                 del tmp_df
                 del tmp_res
 
@@ -209,15 +227,15 @@ class holt_winter(ts_generic):
 if __name__ == "__main__":
 
     ## test arima data frame version ###
-    np.random.seed(0)
-    count = np.random.rand(457,2)
-    count = count/100
-    df = pd.DataFrame(index=pd.date_range('2016-01-01', '2017-04-01'), data=count, columns=['count1','count2'])
-    print df.shape
-    print df.head(5)
-    arima_test = arima(df, lookback=420)
-    arima_test()
-    print arima_test.result
+    # np.random.seed(0)
+    # count = np.random.rand(105,2)
+    # count = count/100
+    # df = pd.DataFrame(index=pd.date_range('2016-01-01', '2016-04-14'), data=count, columns=['count1','count2'])
+    # print df.shape
+    # print df.tail()
+    # arima_test = arima(df, lookback=100)
+    # arima_test()
+    # print arima_test.result
 
     ### test arima data frame version ###
     # np.random.seed(0)
@@ -229,4 +247,23 @@ if __name__ == "__main__":
     # hw_test()
     # print hw_test.result
 
+    np.random.seed(0)
+    count = np.random.rand(105,2)
+    count = count/100
+    df = pd.DataFrame(index=pd.date_range('2016-01-01', '2016-04-14'), data=count, columns=['count1','count2'])
+    print df.shape
+    hw_test = holt_winter(df, lookback=100)
+    hw_test()
+    print df.tail(10)
+    print hw_test.result.tail(10)
+
+    np.random.seed(0)
+    count = np.random.rand(105,2)
+    count = count/100
+    df = pd.DataFrame(index=pd.date_range('2016-01-01', '2016-04-14'), data=count, columns=['count1','count2'])
+    print df.shape
+    arima_test = arima(df, lookback=100)
+    arima_test()
+    print df.tail(10)
+    print arima_test.result.tail(10)
 
